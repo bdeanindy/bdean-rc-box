@@ -25,12 +25,11 @@ var boxJwtHeader = {
     kid: process.env.BOX_KEY_ID
 };
 
-// Generate Unix timestamp and add 60
-var ts = Math.floor(Date.now() / 1000); // In seconds
-//console.log('TIMESTAMP FOR EXP: ', ts);
-var ts = ts + 60; // Add sixty seconds 
-//console.log('TIMESTAMP FOR EXP + 60: ', ts);
+// Generate Unix timestamp and add JWT Claims EXP time of 60 seconds max per Box docs
+var jwtExp = Math.floor(Date.now() / 1000); // In seconds
+var jwtExp = jwtExp + process.env.BOX_JWT_CLAIMS_EXP;
 
+// jwt module expects payload to contain header and claims (seems to work...but Box docs do not line up)
 var boxJwtClaims = {
     alg: process.env.BOX_JWT_HEADER_ALG,
     typ: process.env.BOX_JWT_HEADER_TYP,
@@ -40,7 +39,7 @@ var boxJwtClaims = {
     box_sub_type: process.env.BOX_JWT_CLAIMS_BOX_SUB_TYPE,
     aud: process.env.BOX_JWT_CLAIMS_AUD,
     jti: process.env.BOX_JWT_CLAIMS_JTI,
-    exp: ts
+    exp: jwtExp 
 };
 
 var myJWT = jwt.sign(boxJwtClaims,process.env.BOX_PRIVATE_KEY);
@@ -57,12 +56,11 @@ var boxsdk = new BOX({
     }
 });
 
-/*
+// TODO - Needs Promise-wrapped to wait for Auth response and invalidation
 boxsdk.getTokensAuthorizationCodeGrant(authCode, null, function(err, tokenInfo) {
     console.log('Box tokenInfo: ', tokenInfo);
 });
 console.log('Box auth: ', boxsdk);
-*/
 
 // Authenticate with RingCentral
 var platform = rcsdk.platform();
@@ -82,6 +80,7 @@ platform.login({
 // Configure RingCentral Subscription
 var subscription = rcsdk.createSubscription();
 
+// TODO - This is broken right now
 // Get the enterprise client, used to create and manage app user accounts
 boxsdk.getPersistentClient();
 
