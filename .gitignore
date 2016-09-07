@@ -1,0 +1,8 @@
+*.swp
+*.swo
+*.log
+*.pem
+
+node_modules
+
+.env

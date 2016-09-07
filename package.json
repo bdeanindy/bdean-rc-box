@@ -1,0 +1,25 @@
+{
+  "name": "bdean-rc-box",
+  "version": "0.1.0",
+  "description": "Simple application to write RingCentral call log data and recordings to Box",
+  "main": "index.js",
+  "scripts": {
+    "test": "",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "RingCentral",
+    "Box",
+    "cloud",
+    "communication",
+    "data"
+  ],
+  "author": "Benjamin Dean",
+  "license": "MIT",
+  "dependencies": {
+    "box-node-sdk": "^1.0.0",
+    "dotenv": "^2.0.0",
+    "jsonwebtoken": "^7.1.9",
+    "ringcentral": "^3.0.0-rc1"
+  }
+}
