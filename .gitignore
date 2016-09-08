@@ -3,6 +3,7 @@
 *.log
 *.pem
 *.txt
+callLogRecords_*.*
 
 node_modules
 

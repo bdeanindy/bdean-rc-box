@@ -3,6 +3,7 @@
 require('dotenv').load();
 const fs = require('fs');
 const http = require('http');
+const moment = require('moment');
 const rp = require('request-promise');
 const RC = require('ringcentral');
 const BOX = require('box-node-sdk');
@@ -32,9 +33,7 @@ var boxJwtHeader = {
 
 // Generate Unix timestamp and add JWT Claims EXP time of 60 seconds max per Box docs
 var jwtExp = Math.floor(Date.now() / 1000); // In seconds
-console.log('jwtExp: ', jwtExp);
 var jwtExp = Number(jwtExp) + Number(process.env.BOX_JWT_CLAIMS_EXP);
-console.log('jwtExp + ' + process.env.BOX_JWT_CLAIMS_EXP + ': ' + jwtExp);
 
 // jwt module expects payload to contain header and claims (seems to work...but Box docs do not line up)
 var boxJwt = {
@@ -54,7 +53,6 @@ var boxJwt = {
 };
 
 var myJWT = jwt.sign(boxJwt, process.env.BOX_PRIVATE_KEY);
-console.log('myJWT: ', myJWT);
 
 // Instantiate and authenticate with Box
 var boxsdk = new BOX({
@@ -79,7 +77,6 @@ platform.login({
     var boxAuthUrl = boxsdk.getAuthorizeURL({client_id: process.env.BOX_CLIENT_ID});
     console.log('Box Auth URL: ', boxAuthUrl);
     boxClient = boxsdk.getAppAuthClient('enterprise', process.env.BOX_ENTERPRISE_ID);
-    //console.log('Box App Auth Client: ', boxClient);
     // We should be ready to start making API requests...
     getCallsWithRecordings();
 })
@@ -89,6 +86,10 @@ platform.login({
 });
 
 function getCallsWithRecordings() {
+    // Not used currently, but can replace `dateFrom` and `dateTo` below, since I haven't created a call recording in the past 24 hours
+    var today = moment();
+    var todayMinus24 = today.subtract({hours: 24});
+
     // Gets call logs which have recordings
     platform.get(
         '/account/~/extension/~/call-log',
@@ -98,8 +99,9 @@ function getCallsWithRecordings() {
             dateTo: '2016-09-09T00:00:00.000Z'
         })
         .then(function(callLogsWithRecordings) {
-            var callLogsFilename = 'callLogRecords_' + jwtExp + '.txt';
-            fs.writeFile(callLogsFilename, JSON.stringify(callLogsWithRecordings), 'utf8', function(err){
+            var callLogsFilename = 'callLogRecords_' + jwtExp + '.json';
+            var callLogData = callLogsWithRecordings.json().records;
+            fs.writeFile(callLogsFilename, JSON.stringify(callLogData), 'utf8', function(err){
                 if(err) {
                     console.error(err);
                     throw err;
@@ -107,50 +109,12 @@ function getCallsWithRecordings() {
                     storeOnBox(callLogsFilename);
                 }
             });
-            //callLogsWithRecordings.pipe(callLogsFile);
-            //cacheRecording(callLogsWithRecordings.json().records);
-            // Gets the root box folder
-            /*
-            boxClient.folders.get(
-                '0',
-                {
-                    fields: 'name,shared_link,permissions,collections,sync_state'
-                },
-                function(err, folder) {
-                    if(err) {
-                        console.error(err);
-                        throw err;
-                    } else {
-                        console.log(folder);
-                    }
-            });
-            */
-        })
-        .catch(function(e) {
-            console.error(e);
-            throw e;
-        });
-    // TODO: When we have received the call recording, save it to Box
-}
-
-/* TODO: Broken, running into permission issues with the API, fix later
-function cacheRecording(callLogsArray) {
-    recordingLogRecords = callLogsArray;
-    //console.log('Call Logs with Recordings: ', recordingLogRecords); 
-    platform.get('/account/~/recording/' + recordingLogRecords[0].recording.id)
-        .then(function(recordingData) {
-            var recordingFileName = 'callRecording_' + recordingLogRecords[0].recording.id + '.mp4';
-            var recording = fs.createWriteStream(recordingFileName);
-            recordingData.pipe(recording);
-            console.log('File should be saved now');
-            saveRecordingToBox(recordingFileName);
         })
         .catch(function(e) {
             console.error(e);
             throw e;
         });
 }
-*/
 
 function storeOnBox(filename) {
     var stream = fs.createReadStream(filename);
@@ -162,10 +126,6 @@ function storeOnBox(filename) {
             console.log('DATA SAVED ON BOX: ', data);
         }
     });
-}
-
-function saveRecordingToBox(recordingFileName) {
-    console.log('Recording filename to save: ', recordingFileName);
 }
 
 // Register Platform Event Listeners
