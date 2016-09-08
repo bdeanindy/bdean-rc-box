@@ -13,6 +13,7 @@ This is a demo application which pulls call log data from RingCentral and upload
     * Box:
         * Auth App
 * Node.js
+* RingCentral Account must have Call Recordings (view our product documentation for more information)
 
 
 ## Installation
