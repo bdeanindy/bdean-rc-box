@@ -20,6 +20,8 @@
     "box-node-sdk": "^1.0.0",
     "dotenv": "^2.0.0",
     "jsonwebtoken": "^7.1.9",
+    "request": "^2.74.0",
+    "request-promise": "^4.1.1",
     "ringcentral": "^3.0.0-rc1"
   }
 }

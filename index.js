@@ -2,6 +2,7 @@
 
 require('dotenv').load();
 const http = require('http');
+const rp = require('request-promise');
 const RC = require('ringcentral');
 const BOX = require('box-node-sdk');
 const jwt = require('jsonwebtoken');
@@ -27,22 +28,28 @@ var boxJwtHeader = {
 
 // Generate Unix timestamp and add JWT Claims EXP time of 60 seconds max per Box docs
 var jwtExp = Math.floor(Date.now() / 1000); // In seconds
-var jwtExp = jwtExp + process.env.BOX_JWT_CLAIMS_EXP;
+console.log('jwtExp: ', jwtExp);
+var jwtExp = Number(jwtExp) + Number(process.env.BOX_JWT_CLAIMS_EXP);
+console.log('jwtExp + ' + process.env.BOX_JWT_CLAIMS_EXP + ': ' + jwtExp);
 
 // jwt module expects payload to contain header and claims (seems to work...but Box docs do not line up)
-var boxJwtClaims = {
-    alg: process.env.BOX_JWT_HEADER_ALG,
-    typ: process.env.BOX_JWT_HEADER_TYP,
-    kid: process.env.BOX_KEY_ID,
-    iss: process.env.BOX_CLIENT_ID,
-    sub: process.env.BOX_JWT_CLAIMS_SUB,
-    box_sub_type: process.env.BOX_JWT_CLAIMS_BOX_SUB_TYPE,
-    aud: process.env.BOX_JWT_CLAIMS_AUD,
-    jti: process.env.BOX_JWT_CLAIMS_JTI,
-    exp: jwtExp 
+var boxJwt = {
+        header: {
+            alg: process.env.BOX_JWT_HEADER_ALG,
+            typ: process.env.BOX_JWT_HEADER_TYP,
+            kid: process.env.BOX_KEY_ID
+        },
+        claims: {
+            iss: process.env.BOX_CLIENT_ID,
+            sub: process.env.BOX_JWT_CLAIMS_SUB,
+            box_sub_type: process.env.BOX_JWT_CLAIMS_BOX_SUB_TYPE,
+            aud: process.env.BOX_JWT_CLAIMS_AUD,
+            jti: process.env.BOX_JWT_CLAIMS_JTI,
+            exp: jwtExp 
+        }
 };
 
-var myJWT = jwt.sign(boxJwtClaims,process.env.BOX_PRIVATE_KEY);
+var myJWT = jwt.sign(boxJwt, process.env.BOX_PRIVATE_KEY);
 console.log('myJWT: ', myJWT);
 
 // Instantiate and authenticate with Box
@@ -56,12 +63,6 @@ var boxsdk = new BOX({
     }
 });
 
-// TODO - Needs Promise-wrapped to wait for Auth response and invalidation
-boxsdk.getTokensAuthorizationCodeGrant(authCode, null, function(err, tokenInfo) {
-    console.log('Box tokenInfo: ', tokenInfo);
-});
-console.log('Box auth: ', boxsdk);
-
 // Authenticate with RingCentral
 var platform = rcsdk.platform();
 platform.login({
@@ -71,19 +72,48 @@ platform.login({
 })
 .then(function(authRes) {
     console.log('RignCentral Login Response: ', authRes.json());
+    var boxAuthUrl = boxsdk.getAuthorizeURL({client_id: process.env.BOX_CLIENT_ID});
+    console.log('Box Auth URL: ', boxAuthUrl);
+    var boxClient = boxsdk.getAppAuthClient('enterprise', process.env.BOX_ENTERPRISE_ID);
+    //console.log('Box App Auth Client: ', boxClient);
+    // We should be ready to start making API requests...
+    init(boxClient);
 })
 .catch(function(e) {
     console.error(e);
     throw e;
 });
 
-// Configure RingCentral Subscription
-var subscription = rcsdk.createSubscription();
+function init(boxClient) {
+    // Just displays information about the current user as a visual sanity check in runtime, can be removed if not needed
+    /*
+    boxClient.users.get(boxClient.CURRENT_USER_ID, null, function(err, currentUser) {
+        if(err) {
+            console.err(err);
+            throw err;
+        } else {
+            console.log('SUCCESSFULLY AUTHENTICATED WITH BOX, CURRENT USER:\n', currentUser);
+        }
+    });
+    */
 
-// TODO - This is broken right now
-// Get the enterprise client, used to create and manage app user accounts
-boxsdk.getPersistentClient();
-
+    platform.get(
+        '/account/~/extension/~/call-log',
+        {
+            withRecording: true,
+            dateFrom: '2016-01-01T00:00:00.000Z',
+            dateTo: '2016-09-09T00:00:00.000Z'
+        })
+        .then(function(callLogsWithRecordings) {
+            console.log('Call Logs With Recordings: ', callLogsWithRecordings.json());
+            // TODO: Save a recording to local file system
+        })
+        .catch(function(e) {
+            console.error(e);
+            throw e;
+        });
+    // TODO: When we have received the call recording, save it to Box
+}
 
 // Register Platform Event Listeners
 platform.on(platform.events.loginSuccess, function(e){
@@ -110,28 +140,6 @@ platform.on(platform.events.refreshError, function(e){
     console.log('refreshError', e);
 });
 
-// Register Subscription Event Listeners
-subscription.on(subscription.events.notification, function(e) {
-    console.log('Subscription notification', e);
-});
-subscription.on(subscription.events.removeSuccess, function(e) {
-    console.log('Subscription removeSuccess', e);
-});
-subscription.on(subscription.events.removeError, function(e) {
-    console.log('Subscription removeError', e);
-});
-subscription.on(subscription.events.renewSuccess, function(e) {
-    console.log('Subscription renewSuccess', e);
-});
-subscription.on(subscription.events.renewError, function(e) {
-    console.log('Subscription renewError', e);
-});
-subscription.on(subscription.events.subscribeSuccess, function(e) {
-    console.log('Subscribe Success', e);
-});
-subscription.on(subscription.events.subscribeError, function(e) {
-    console.log('Subscribe Error', e);
-});
 
 // Box SDK Event Handlers
 boxsdk.on('response', function(err, data) {
@@ -139,11 +147,19 @@ boxsdk.on('response', function(err, data) {
         console.error(err);
         throw err;
     } else {
-        console.log('Box Response Data: ', data);
-        // TODO: Is auth response?
-        // TODO: Is content response?
+        //console.log('BOX RESPONSE DATA: ', data);
+        //console.log('BOX REQUEST URL: ', data.request.uri);
+        //console.log('BOX RESPONSE DATA: ', data.body);
+        if('/oauth2/token' === data.request.uri.pathname) {
+            console.log('Box Auth Data: ', data.body);
+        }
+
+        if('/2.0/users/me' === data.request.uri.pathname) {
+            console.log('Box User data: ', data.body);
+        }
     }
 });
+
 
 // HTTP Server
 server.listen(process.env.PORT, function() {
