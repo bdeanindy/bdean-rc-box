@@ -19,7 +19,7 @@ This is a demo application which pulls call log data from RingCentral and upload
 ## Installation
 
 1. Clone the repository `git clone https://github.com/bdeanindy/bdean-rc-box.git`
-2. Rename the **.env.tmpl** to **.env** `mv .env.tmpl .env`
+2. Rename the **env.tmpl** to **.env** `mv env.tmpl .env`
 3. Fill in the values of the **.env** file which are blank
 4. Install the dependencies `npm install`
 
