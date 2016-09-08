@@ -8,6 +8,9 @@ const RC = require('ringcentral');
 const BOX = require('box-node-sdk');
 const jwt = require('jsonwebtoken');
 
+// App Vars
+var boxClient, recordingLogRecords;
+
 // Configure the server
 var server = http.createServer();
 server.on('request', function(req, res) {
@@ -75,29 +78,18 @@ platform.login({
     console.log('RignCentral Login Response: ', authRes.json());
     var boxAuthUrl = boxsdk.getAuthorizeURL({client_id: process.env.BOX_CLIENT_ID});
     console.log('Box Auth URL: ', boxAuthUrl);
-    var boxClient = boxsdk.getAppAuthClient('enterprise', process.env.BOX_ENTERPRISE_ID);
+    boxClient = boxsdk.getAppAuthClient('enterprise', process.env.BOX_ENTERPRISE_ID);
     //console.log('Box App Auth Client: ', boxClient);
     // We should be ready to start making API requests...
-    init(boxClient);
+    getCallsWithRecordings();
 })
 .catch(function(e) {
     console.error(e);
     throw e;
 });
 
-function init(boxClient) {
-    // Just displays information about the current user as a visual sanity check in runtime, can be removed if not needed
-    /*
-    boxClient.users.get(boxClient.CURRENT_USER_ID, null, function(err, currentUser) {
-        if(err) {
-            console.err(err);
-            throw err;
-        } else {
-            console.log('SUCCESSFULLY AUTHENTICATED WITH BOX, CURRENT USER:\n', currentUser);
-        }
-    });
-    */
-
+function getCallsWithRecordings() {
+    // Gets call logs which have recordings
     platform.get(
         '/account/~/extension/~/call-log',
         {
@@ -106,14 +98,74 @@ function init(boxClient) {
             dateTo: '2016-09-09T00:00:00.000Z'
         })
         .then(function(callLogsWithRecordings) {
-            console.log('Call Logs With Recordings: ', callLogsWithRecordings.json());
-            // TODO: Save a recording to local file system
+            var callLogsFilename = 'callLogRecords_' + jwtExp + '.txt';
+            fs.writeFile(callLogsFilename, JSON.stringify(callLogsWithRecordings), 'utf8', function(err){
+                if(err) {
+                    console.error(err);
+                    throw err;
+                } else {
+                    storeOnBox(callLogsFilename);
+                }
+            });
+            //callLogsWithRecordings.pipe(callLogsFile);
+            //cacheRecording(callLogsWithRecordings.json().records);
+            // Gets the root box folder
+            /*
+            boxClient.folders.get(
+                '0',
+                {
+                    fields: 'name,shared_link,permissions,collections,sync_state'
+                },
+                function(err, folder) {
+                    if(err) {
+                        console.error(err);
+                        throw err;
+                    } else {
+                        console.log(folder);
+                    }
+            });
+            */
         })
         .catch(function(e) {
             console.error(e);
             throw e;
         });
     // TODO: When we have received the call recording, save it to Box
+}
+
+/* TODO: Broken, running into permission issues with the API, fix later
+function cacheRecording(callLogsArray) {
+    recordingLogRecords = callLogsArray;
+    //console.log('Call Logs with Recordings: ', recordingLogRecords); 
+    platform.get('/account/~/recording/' + recordingLogRecords[0].recording.id)
+        .then(function(recordingData) {
+            var recordingFileName = 'callRecording_' + recordingLogRecords[0].recording.id + '.mp4';
+            var recording = fs.createWriteStream(recordingFileName);
+            recordingData.pipe(recording);
+            console.log('File should be saved now');
+            saveRecordingToBox(recordingFileName);
+        })
+        .catch(function(e) {
+            console.error(e);
+            throw e;
+        });
+}
+*/
+
+function storeOnBox(filename) {
+    var stream = fs.createReadStream(filename);
+    boxClient.files.uploadFile('0', filename, stream, function(err, data) {
+        if(err) {
+            console.error(err);
+            throw err;
+        } else {
+            console.log('DATA SAVED ON BOX: ', data);
+        }
+    });
+}
+
+function saveRecordingToBox(recordingFileName) {
+    console.log('Recording filename to save: ', recordingFileName);
 }
 
 // Register Platform Event Listeners

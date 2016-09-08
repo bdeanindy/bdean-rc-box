@@ -2,6 +2,7 @@
 *.swo
 *.log
 *.pem
+*.txt
 
 node_modules
 
