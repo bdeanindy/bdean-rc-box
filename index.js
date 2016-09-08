@@ -1,6 +1,7 @@
 'use strict';
 
 require('dotenv').load();
+const fs = require('fs');
 const http = require('http');
 const rp = require('request-promise');
 const RC = require('ringcentral');
